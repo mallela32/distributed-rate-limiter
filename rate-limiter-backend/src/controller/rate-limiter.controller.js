@@ -6,13 +6,13 @@ import {
   setState,
 } from "../store/rateLimitStore.js";
 
-export const checkController = (req, res) => {
+export const checkController = async (req, res) => {
   const { user_id, endpoint } = req.body;
-  const config = getConfig(endpoint);
-  const state = getState(user_id, endpoint, config);
+  const config = await getConfig(endpoint);
+  const state = await getState(user_id, endpoint, config);
 
   const result = checkAndConsumeToken(state, config);
-  setState(user_id, endpoint, {
+  await setState(user_id, endpoint, {
     tokens: result.tokensLeft,
     lastRefillDate: result.lastRefillDate,
   });
@@ -24,8 +24,8 @@ export const checkController = (req, res) => {
   });
 };
 
-export const updateSettings = (req, res) => {
+export const updateSettings = async (req, res) => {
   const { endpoint, new_limit, window_sec } = req.body;
-  setConfig(endpoint, { limit: new_limit, windowSec: window_sec });
+  await setConfig(endpoint, { limit: new_limit, windowSec: window_sec });
   res.json({ message: "settings updated successfully" });
 };
