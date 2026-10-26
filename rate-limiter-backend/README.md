@@ -62,12 +62,11 @@ Semantics:
 
 Implemented in [`utils/checkAndConsumeToken.js`](./utils/checkAndConsumeToken.js).
 
-## Planned API
+## API
 
-Not yet implemented — this is the contract the service will expose once
-the Express layer is built.
+Routes are mounted under `/rate-limiter`.
 
-### `POST /check`
+### `POST /rate-limiter/check`
 
 Called by the App Backend on every rate-checked request. Atomic
 check-and-consume: a single call both decides and deducts a token.
@@ -77,7 +76,16 @@ body:     { user_id, endpoint }
 response: { allowed: true/false, retry_after: number|null, tokens_left: number }
 ```
 
-### `POST /update-settings`
+- `200` when allowed, `429 Too Many Requests` when denied, `400` if
+  `user_id` or `endpoint` is missing or not a non-empty string.
+- `tokens_left` is whole tokens (rounded down).
+- Response headers on every `/check` reply: `X-RateLimit-Limit`,
+  `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (unix seconds at which
+  the bucket would be full again). Denials also set `Retry-After`
+  (seconds).
+- An endpoint with no saved rule uses the default (10 tokens per 60s).
+
+### `POST /rate-limiter/update-settings`
 
 Called directly by the frontend admin panel to manage rate-limit rules.
 
@@ -88,10 +96,9 @@ response: { message: "settings updated successfully" }
 
 ## Storage Roadmap
 
-- **Now:** state lives wherever it's wired up during development (no
-  persistent store yet).
-- **Next:** Redis, using plain `GET`/`SET` (or `HGET`/`HSET`) round
-  trips. **Known limitation, intentionally deferred:** read and write are
+- **Now:** Redis hashes (`rl:state:<user>:<endpoint>` and
+  `rl:config:<endpoint>`) using plain `HGETALL`/`HSET` round trips.
+  **Known limitation, intentionally deferred:** read and write are
   separate round trips, so two concurrent requests on the same key can
   both read stale data and both be allowed when only one should be —
   the same lost-update race the pure function's denial-path fix avoids

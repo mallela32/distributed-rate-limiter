@@ -6,21 +6,46 @@ import {
   setState,
 } from "../store/rateLimitStore.js";
 
+const isNonEmptyString = (value) =>
+  typeof value === "string" && value.trim() !== "";
+
 export const checkController = async (req, res) => {
-  const { user_id, endpoint } = req.body;
+  const { user_id, endpoint } = req.body ?? {};
+  if (!isNonEmptyString(user_id) || !isNonEmptyString(endpoint)) {
+    return res
+      .status(400)
+      .json({ error: "user_id and endpoint are required strings" });
+  }
+
   const config = await getConfig(endpoint);
   const state = await getState(user_id, endpoint, config);
-
   const result = checkAndConsumeToken(state, config);
-  await setState(user_id, endpoint, {
-    tokens: result.tokensLeft,
-    lastRefillDate: result.lastRefillDate,
-  });
 
-  res.json({
+  // A denial leaves the stored state untouched, so only persist on success.
+  if (result.allowed) {
+    await setState(user_id, endpoint, {
+      tokens: result.tokensLeft,
+      lastRefillDate: result.lastRefillDate,
+    });
+  }
+
+  const tokensLeft = Math.floor(result.tokensLeft);
+  const refillRate = config.limit / config.windowSec;
+  const secondsUntilFull = (config.limit - result.tokensLeft) / refillRate;
+
+  res.set({
+    "X-RateLimit-Limit": String(config.limit),
+    "X-RateLimit-Remaining": String(tokensLeft),
+    "X-RateLimit-Reset": String(Math.ceil(Date.now() / 1000 + secondsUntilFull)),
+  });
+  if (!result.allowed) {
+    res.set("Retry-After", String(result.retryAfter));
+  }
+
+  res.status(result.allowed ? 200 : 429).json({
     allowed: result.allowed,
     retry_after: result.retryAfter,
-    tokens_left: result.tokensLeft,
+    tokens_left: tokensLeft,
   });
 };
 
