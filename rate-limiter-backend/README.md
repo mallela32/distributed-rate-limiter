@@ -87,11 +87,40 @@ response: { allowed: true/false, retry_after: number|null, tokens_left: number }
 
 ### `POST /rate-limiter/update-settings`
 
-Called directly by the frontend admin panel to manage rate-limit rules.
+Called directly by the frontend admin panel to create or update a rule.
 
 ```
 body:     { endpoint: "/", new_limit: 100, window_sec: 60 }
 response: { message: "settings updated successfully" }
+```
+
+`400` if `endpoint` isn't a non-empty string or `new_limit`/`window_sec`
+aren't positive numbers.
+
+### `GET /rate-limiter/rules`
+
+Lists every configured rule.
+
+```
+response: { rules: [{ endpoint, limit, windowSec }, ...] }
+```
+
+### `POST /rate-limiter/delete-rule`
+
+Removes a rule, falling back to the default config for that endpoint.
+
+```
+body:     { endpoint: "/" }
+response: { message: "rule deleted" }
+```
+
+### `GET /rate-limiter/metrics`
+
+Allowed/denied counts per endpoint, tracked since the counters were last
+reset.
+
+```
+response: { metrics: [{ endpoint, allowed, denied }, ...] }
 ```
 
 ## Storage Roadmap

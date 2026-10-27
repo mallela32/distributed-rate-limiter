@@ -1,13 +1,20 @@
 import { checkAndConsumeToken } from "../utils/checkAndConsumeToken.js";
+import { logger } from "../utils/logger.js";
 import {
   getConfig,
   setConfig,
   getState,
   setState,
+  listConfigs,
+  deleteConfig,
+  incrementMetric,
+  listMetrics,
 } from "../store/rateLimitStore.js";
 
 const isNonEmptyString = (value) =>
   typeof value === "string" && value.trim() !== "";
+
+const isPositiveNumber = (value) => typeof value === "number" && value > 0;
 
 export const checkController = async (req, res) => {
   const { user_id, endpoint } = req.body ?? {};
@@ -28,6 +35,8 @@ export const checkController = async (req, res) => {
       lastRefillDate: result.lastRefillDate,
     });
   }
+  await incrementMetric(endpoint, result.allowed ? "allowed" : "denied");
+  logger.info("check", { user_id, endpoint, allowed: result.allowed });
 
   const tokensLeft = Math.floor(result.tokensLeft);
   const refillRate = config.limit / config.windowSec;
@@ -50,7 +59,35 @@ export const checkController = async (req, res) => {
 };
 
 export const updateSettings = async (req, res) => {
-  const { endpoint, new_limit, window_sec } = req.body;
+  const { endpoint, new_limit, window_sec } = req.body ?? {};
+  if (
+    !isNonEmptyString(endpoint) ||
+    !isPositiveNumber(new_limit) ||
+    !isPositiveNumber(window_sec)
+  ) {
+    return res.status(400).json({
+      error: "endpoint, new_limit and window_sec are required",
+    });
+  }
   await setConfig(endpoint, { limit: new_limit, windowSec: window_sec });
   res.json({ message: "settings updated successfully" });
+};
+
+export const listRules = async (req, res) => {
+  const rules = await listConfigs();
+  res.json({ rules });
+};
+
+export const deleteRule = async (req, res) => {
+  const { endpoint } = req.body ?? {};
+  if (!isNonEmptyString(endpoint)) {
+    return res.status(400).json({ error: "endpoint is required" });
+  }
+  await deleteConfig(endpoint);
+  res.json({ message: "rule deleted" });
+};
+
+export const getMetrics = async (req, res) => {
+  const metrics = await listMetrics();
+  res.json({ metrics });
 };

@@ -4,6 +4,7 @@ const DEFAULT_CONFIG = { limit: 10, windowSec: 60 };
 
 const stateKey = (userId, endpoint) => `rl:state:${userId}:${endpoint}`;
 const configKey = (endpoint) => `rl:config:${endpoint}`;
+const metricsKey = (endpoint) => `rl:metrics:${endpoint}`;
 
 // Naive Redis access: separate read/write round trips per call, so two
 // concurrent requests on the same key can both read stale state. Known
@@ -40,4 +41,46 @@ export const getState = async (userId, endpoint, config) => {
 
 export const setState = async (userId, endpoint, state) => {
   await redisClient.hSet(stateKey(userId, endpoint), state);
+};
+
+const scanKeys = async (pattern) => {
+  const keys = [];
+  for await (const batch of redisClient.scanIterator({ MATCH: pattern })) {
+    keys.push(...batch);
+  }
+  return keys;
+};
+
+export const listConfigs = async () => {
+  const keys = await scanKeys("rl:config:*");
+  return Promise.all(
+    keys.map(async (key) => {
+      const endpoint = key.slice("rl:config:".length);
+      const config = await redisClient.hGetAll(key);
+      return { endpoint, limit: Number(config.limit), windowSec: Number(config.windowSec) };
+    })
+  );
+};
+
+export const deleteConfig = async (endpoint) => {
+  await redisClient.del(configKey(endpoint));
+};
+
+export const incrementMetric = async (endpoint, field) => {
+  await redisClient.hIncrBy(metricsKey(endpoint), field, 1);
+};
+
+export const listMetrics = async () => {
+  const keys = await scanKeys("rl:metrics:*");
+  return Promise.all(
+    keys.map(async (key) => {
+      const endpoint = key.slice("rl:metrics:".length);
+      const data = await redisClient.hGetAll(key);
+      return {
+        endpoint,
+        allowed: Number(data.allowed || 0),
+        denied: Number(data.denied || 0),
+      };
+    })
+  );
 };
