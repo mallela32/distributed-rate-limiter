@@ -131,3 +131,17 @@ test("with the limiter unreachable, fail-open serves and fail-closed returns 503
   const closed = await fetch(`${closedUrl}${testEndpoint}`);
   assert.equal(closed.status, 503);
 });
+
+test("app.js responses carry CORS headers and preflight succeeds", async () => {
+  const { default: app } = await import("./app.js");
+  const server = app.listen(0);
+  servers.push(server);
+  const baseUrl = `http://localhost:${server.address().port}`;
+
+  const res = await fetch(`${baseUrl}/health`);
+  assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:5173");
+  assert.ok(res.headers.get("access-control-expose-headers").includes("Retry-After"));
+
+  const preflight = await fetch(`${baseUrl}/api/login`, { method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+});

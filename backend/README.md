@@ -37,6 +37,7 @@ Copy `.env.example` to `.env`.
 | `RATE_LIMITER_URL`         | `http://localhost:4000` |
 | `RATE_LIMITER_TIMEOUT_MS`  | `500`                   |
 | `RATE_LIMITER_FAIL_MODE`   | `open`                  |
+| `CORS_ORIGIN`              | `http://localhost:5173` |
 
 Avoid port 5000 on macOS, since AirPlay Receiver answers on it.
 

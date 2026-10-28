@@ -1,7 +1,9 @@
 import express from "express";
 import demoRouter from "./routes/demo.route.js";
+import { cors } from "./middleware/cors.js";
 
 const app = express();
+app.use(cors);
 app.use(express.json());
 
 app.get("/health", (req, res) => {

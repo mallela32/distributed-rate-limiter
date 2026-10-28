@@ -88,3 +88,12 @@ test("metrics reflect allowed and denied checks", async () => {
   assert.ok(entry.allowed >= 2);
   assert.ok(entry.denied >= 1);
 });
+
+test("responses carry CORS headers and preflight succeeds", async () => {
+  const res = await fetch(`${baseUrl}/rate-limiter/rules`);
+  assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:5173");
+  assert.ok(res.headers.get("access-control-expose-headers").includes("X-RateLimit-Remaining"));
+
+  const preflight = await fetch(`${baseUrl}/rate-limiter/check`, { method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+});

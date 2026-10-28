@@ -5,4 +5,5 @@ export const config = {
   // "open" lets requests through when the limiter is down, "closed" rejects them.
   rateLimiterFailMode:
     process.env.RATE_LIMITER_FAIL_MODE === "closed" ? "closed" : "open",
+  corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
 };

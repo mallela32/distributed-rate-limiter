@@ -123,6 +123,16 @@ reset.
 response: { metrics: [{ endpoint, allowed, denied }, ...] }
 ```
 
+## Configuration
+
+Copy `config/.env.example` to `config/.env` for local `pnpm dev` runs.
+
+| Variable      | Default                   |
+| ------------- | -------------------------- |
+| `PORT`        | `4000`                     |
+| `REDIS_URL`   | `redis://localhost:6379`   |
+| `CORS_ORIGIN` | `http://localhost:5173`    |
+
 ## Running with Docker
 
 ```bash
