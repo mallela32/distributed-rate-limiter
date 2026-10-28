@@ -123,6 +123,17 @@ reset.
 response: { metrics: [{ endpoint, allowed, denied }, ...] }
 ```
 
+## Running with Docker
+
+```bash
+docker compose up --build
+```
+
+Starts the service on port 4000 together with its own Redis container
+(not published to the host, so it won't clash with a local Redis). The
+container reads `PORT` and `REDIS_URL` from the compose file; a local
+`config/.env` is only used when running with `pnpm dev`.
+
 ## Storage Roadmap
 
 - **Now:** Redis hashes (`rl:state:<user>:<endpoint>` and
