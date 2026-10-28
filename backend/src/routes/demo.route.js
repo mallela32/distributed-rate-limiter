@@ -4,8 +4,10 @@ import {
   sendMessage,
   getProducts,
 } from "../controller/demo.controller.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
+router.use(rateLimit);
 
 router.post("/login", login);
 router.post("/messages", sendMessage);
