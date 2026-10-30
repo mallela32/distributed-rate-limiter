@@ -1,10 +1,7 @@
-import { checkAndConsumeToken } from "../utils/checkAndConsumeToken.js";
 import { logger } from "../utils/logger.js";
 import {
-  getConfig,
   setConfig,
-  getState,
-  setState,
+  checkAndConsume,
   listConfigs,
   deleteConfig,
   incrementMetric,
@@ -24,26 +21,17 @@ export const checkController = async (req, res) => {
       .json({ error: "user_id and endpoint are required strings" });
   }
 
-  const config = await getConfig(endpoint);
-  const state = await getState(user_id, endpoint, config);
-  const result = checkAndConsumeToken(state, config);
+  const result = await checkAndConsume(user_id, endpoint);
 
-  // A denial leaves the stored state untouched, so only persist on success.
-  if (result.allowed) {
-    await setState(user_id, endpoint, {
-      tokens: result.tokensLeft,
-      lastRefillDate: result.lastRefillDate,
-    });
-  }
   await incrementMetric(endpoint, result.allowed ? "allowed" : "denied");
   logger.info("check", { user_id, endpoint, allowed: result.allowed });
 
   const tokensLeft = Math.floor(result.tokensLeft);
-  const refillRate = config.limit / config.windowSec;
-  const secondsUntilFull = (config.limit - result.tokensLeft) / refillRate;
+  const refillRate = result.limit / result.windowSec;
+  const secondsUntilFull = (result.limit - result.tokensLeft) / refillRate;
 
   res.set({
-    "X-RateLimit-Limit": String(config.limit),
+    "X-RateLimit-Limit": String(result.limit),
     "X-RateLimit-Remaining": String(tokensLeft),
     "X-RateLimit-Reset": String(Math.ceil(Date.now() / 1000 + secondsUntilFull)),
   });

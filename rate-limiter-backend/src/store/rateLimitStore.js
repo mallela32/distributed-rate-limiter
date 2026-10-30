@@ -1,3 +1,6 @@
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import path from "path";
 import { redisClient } from "../../config/redisConnection.js";
 
 const DEFAULT_CONFIG = { limit: 10, windowSec: 60 };
@@ -6,17 +9,15 @@ const stateKey = (userId, endpoint) => `rl:state:${userId}:${endpoint}`;
 const configKey = (endpoint) => `rl:config:${endpoint}`;
 const metricsKey = (endpoint) => `rl:metrics:${endpoint}`;
 
-// Naive Redis access: separate read/write round trips per call, so two
-// concurrent requests on the same key can both read stale state. Known
-// limitation, fixed later with an atomic Lua script (see README).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CHECK_AND_CONSUME_SCRIPT = readFileSync(
+  path.join(__dirname, "checkAndConsume.lua"),
+  "utf8"
+);
 
-export const getConfig = async (endpoint) => {
-  const config = await redisClient.hGetAll(configKey(endpoint));
-  if (Object.keys(config).length === 0) {
-    return DEFAULT_CONFIG;
-  }
-  return { limit: Number(config.limit), windowSec: Number(config.windowSec) };
-};
+// Loaded once at startup; cached by SHA so each /check call is a single
+// EVALSHA round trip instead of shipping the script body every time.
+let checkAndConsumeSha = await redisClient.scriptLoad(CHECK_AND_CONSUME_SCRIPT);
 
 export const setConfig = async (endpoint, config) => {
   await redisClient.hSet(configKey(endpoint), {
@@ -25,22 +26,33 @@ export const setConfig = async (endpoint, config) => {
   });
 };
 
-export const getState = async (userId, endpoint, config) => {
-  const key = stateKey(userId, endpoint);
-  const state = await redisClient.hGetAll(key);
-  if (Object.keys(state).length === 0) {
-    const freshState = { tokens: config.limit, lastRefillDate: Date.now() };
-    await redisClient.hSet(key, freshState);
-    return freshState;
-  }
-  return {
-    tokens: Number(state.tokens),
-    lastRefillDate: Number(state.lastRefillDate),
-  };
-};
+// Runs the whole read-refill-decide-write sequence as one atomic Lua
+// script, so two concurrent requests on the same key can't both read the
+// same tokens and both be allowed.
+export const checkAndConsume = async (userId, endpoint) => {
+  const keys = [stateKey(userId, endpoint), configKey(endpoint)];
+  const args = [String(DEFAULT_CONFIG.limit), String(DEFAULT_CONFIG.windowSec)];
 
-export const setState = async (userId, endpoint, state) => {
-  await redisClient.hSet(stateKey(userId, endpoint), state);
+  let reply;
+  try {
+    reply = await redisClient.evalSha(checkAndConsumeSha, { keys, arguments: args });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("NOSCRIPT")) {
+      checkAndConsumeSha = await redisClient.scriptLoad(CHECK_AND_CONSUME_SCRIPT);
+      reply = await redisClient.eval(CHECK_AND_CONSUME_SCRIPT, { keys, arguments: args });
+    } else {
+      throw err;
+    }
+  }
+
+  const [allowedFlag, tokensLeftRaw, retryAfterRaw, limitRaw, windowSecRaw] = reply;
+  return {
+    allowed: Number(allowedFlag) === 1,
+    tokensLeft: Number(tokensLeftRaw),
+    retryAfter: retryAfterRaw === "" ? null : Number(retryAfterRaw),
+    limit: Number(limitRaw),
+    windowSec: Number(windowSecRaw),
+  };
 };
 
 const scanKeys = async (pattern) => {

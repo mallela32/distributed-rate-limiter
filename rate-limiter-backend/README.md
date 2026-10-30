@@ -60,7 +60,10 @@ Semantics:
   storage. This avoids a lost-update bug where partial refill gets
   double-counted across repeated denials.
 
-Implemented in [`utils/checkAndConsumeToken.js`](./utils/checkAndConsumeToken.js).
+Implemented in [`utils/checkAndConsumeToken.js`](./utils/checkAndConsumeToken.js)
+as the reference implementation of the algorithm (and its unit tests as the
+spec). [`store/checkAndConsume.lua`](./store/checkAndConsume.lua) mirrors it
+exactly, running the same logic atomically inside Redis.
 
 ## API
 
@@ -144,16 +147,22 @@ Starts the service on port 4000 together with its own Redis container
 container reads `PORT` and `REDIS_URL` from the compose file; a local
 `config/.env` is only used when running with `pnpm dev`.
 
-## Storage Roadmap
+## Storage
 
-- **Now:** Redis hashes (`rl:state:<user>:<endpoint>` and
-  `rl:config:<endpoint>`) using plain `HGETALL`/`HSET` round trips.
-  **Known limitation, intentionally deferred:** read and write are
-  separate round trips, so two concurrent requests on the same key can
-  both read stale data and both be allowed when only one should be —
-  the same lost-update race the pure function's denial-path fix avoids
-  in-process. Not fixed yet on purpose, to get the full stack working
-  end-to-end first.
-- **Later (hardening pass):** replace the `GET`/`SET` calls with a Lua
-  script executed atomically via Redis `EVAL`, closing the race properly
-  before this ships for real.
+State is a Redis hash at `rl:state:<user>:<endpoint>` with fields `tokens`
+and `lastRefillDate` (ms). Rules live in a separate hash at
+`rl:config:<endpoint>` with fields `limit` and `windowSec`.
+
+`/check` runs the whole read-refill-decide-write sequence as a single Lua
+script (`store/checkAndConsume.lua`), executed atomically via
+`EVALSHA`/`EVAL` (the script is loaded once at startup and re-loaded on a
+`NOSCRIPT` reply). Both the state key and the rule key are passed in
+`KEYS`, so the script reads the rule itself — the whole decision happens
+in one Redis round trip, closing the lost-update race that a separate
+read/write round trip would have. "Now" comes from `redis.call('TIME')`
+inside the script, not from the app process, so the decision doesn't
+depend on clock skew between app instances. On an allowed request, the
+state key's TTL is refreshed to twice the time needed to refill the
+bucket from empty (floor 60s), so idle `(user, endpoint)` pairs are
+reclaimed instead of accumulating in Redis forever; a denied request
+leaves the stored hash and its TTL untouched.
