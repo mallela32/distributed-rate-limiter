@@ -10,6 +10,10 @@ wants to enforce rate limits, with an admin API to manage rules and view
 metrics. The App Backend exists only to give it something realistic to
 protect, and the frontend exists to make the behavior visible.
 
+**Live demo:** https://rl-dashboard.onrender.com (free hosting, so the
+first load after a quiet spell can take up to a minute while the services
+wake up).
+
 ## Architecture
 
 ```
