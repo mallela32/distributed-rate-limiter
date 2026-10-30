@@ -1,0 +1,48 @@
+services:
+  - type: keyvalue
+    name: rl-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  - type: web
+    name: rl-limiter-service
+    runtime: docker
+    plan: free
+    dockerfilePath: ./rate-limiter-backend/Dockerfile
+    dockerContext: ./rate-limiter-backend
+    healthCheckPath: /rate-limiter/rules
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: rl-redis
+          property: connectionString
+      - key: CORS_ORIGIN
+        value: https://rl-dashboard.onrender.com
+
+  - type: web
+    name: rl-app-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: RATE_LIMITER_URL
+        value: https://rl-limiter-service.onrender.com
+      - key: RATE_LIMITER_TIMEOUT_MS
+        value: "3000"
+      - key: CORS_ORIGIN
+        value: https://rl-dashboard.onrender.com
+
+  - type: web
+    name: rl-dashboard
+    runtime: static
+    rootDir: frontend
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_APP_BACKEND_URL
+        value: https://rl-app-backend.onrender.com
+      - key: VITE_RATE_LIMITER_URL
+        value: https://rl-limiter-service.onrender.com
