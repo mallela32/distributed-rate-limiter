@@ -39,7 +39,7 @@ services:
     name: rl-dashboard
     runtime: static
     rootDir: frontend
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
     staticPublishPath: dist
     envVars:
       - key: VITE_APP_BACKEND_URL
