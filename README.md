@@ -1,5 +1,7 @@
 # Distributed Rate Limiter
 
+[![CI](https://github.com/mallela32/distributed-rate-limiter/actions/workflows/ci.yml/badge.svg)](https://github.com/mallela32/distributed-rate-limiter/actions/workflows/ci.yml)
+
 A small project demonstrating rate limiting as its own microservice,
 with a client service calling it over HTTP and a dashboard to drive and
 inspect it live.
